@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  qa-buster:
+    build: .
+    container_name: qa-buster
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/qa_buster.db
+      - CSV_URL=${CSV_URL}
+      - INGEST_INTERVAL=${INGEST_INTERVAL:-5}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://host.docker.internal:1234/v1}
+      - LLM_API_KEY=${LLM_API_KEY:-lm-studio}
+      - LLM_MODEL=${LLM_MODEL:-local-model}
+      - LLM_WORKER_INTERVAL=${LLM_WORKER_INTERVAL:-10}
+      - FASTAPI_HOST=0.0.0.0
+      - FASTAPI_PORT=8000
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - DEBUG=${DEBUG:-False}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - lm-studio
+    networks:
+      - qa-network
+
+  # Optional: LM Studio in Docker (requires GPU support)
+  lm-studio:
+    image: ghcr.io/lmstudio-ai/lmstudio:latest
+    container_name: lm-studio
+    ports:
+      - "1234:1234"
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - lm-studio-models:/home/user/.lmstudio/models
+    networks:
+      - qa-network
+
+volumes:
+  lm-studio-models:
+
+networks:
+  qa-network:
+    driver: bridge

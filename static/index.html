@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA-Buster - Engineering Q&amp;A</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #282a36;
+            --panel: #303341;
+            --current-line: #44475a;
+            --foreground: #f8f8f2;
+            --comment: #6272a4;
+            --comment-bright: #a5b4fc;
+            --pink: #ff79c6;
+            --yellow: #f1fa8c;
+            --cyan: #8be9fd;
+            --green: #50fa7b;
+            --border: rgba(248, 248, 242, 0.08);
+            --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            min-height: 100vh;
+            padding: 24px;
+            background:
+                radial-gradient(circle at top left, rgba(139, 233, 253, 0.12), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(255, 121, 198, 0.12), transparent 30%),
+                linear-gradient(180deg, #21222c 0%, var(--bg) 100%);
+            color: var(--foreground);
+            font-family: "Fira Code", Consolas, "Courier New", monospace;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(248, 248, 242, 0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(248, 248, 242, 0.025) 1px, transparent 1px);
+            background-size: 32px 32px;
+            opacity: 0.5;
+        }
+
+        .app-shell {
+            width: min(1380px, 100%);
+            margin: 0 auto;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            overflow: hidden;
+            background: rgba(40, 42, 54, 0.96);
+            box-shadow: var(--shadow);
+            position: relative;
+            z-index: 1;
+        }
+
+        .window-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 24px;
+            background: #21222c;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .window-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+        }
+
+        .window-dot.red { background: #ff5f56; }
+        .window-dot.yellow { background: #ffbd2e; }
+        .window-dot.green { background: #27c93f; }
+
+        .window-title {
+            flex: 1;
+            text-align: center;
+            color: var(--comment);
+            font-size: 1.15rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .window-spacer {
+            width: 52px;
+        }
+
+        .workspace {
+            padding: 34px;
+        }
+
+        .ide-banner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 18px 22px;
+            margin-bottom: 28px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(68, 71, 90, 0.35);
+            color: var(--comment);
+            font-size: 1.02rem;
+        }
+
+        .ide-banner strong {
+            color: var(--cyan);
+            font-weight: 500;
+        }
+
+        .panel {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: linear-gradient(180deg, rgba(68, 71, 90, 0.28), rgba(33, 34, 44, 0.92));
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 18px 24px;
+            background: rgba(68, 71, 90, 0.5);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-title {
+            color: var(--cyan);
+            font-size: 1.12rem;
+        }
+
+        .panel-body {
+            padding: 32px;
+        }
+
+        .lobby-state.hidden,
+        .question-state {
+            display: none;
+        }
+
+        .question-state.active {
+            display: block;
+        }
+
+        .terminal {
+            min-height: 520px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 32px;
+        }
+
+        .terminal-output {
+            white-space: pre-wrap;
+            line-height: 2.05;
+            font-size: clamp(1.45rem, 2.2vw, 2.15rem);
+            color: var(--foreground);
+        }
+
+        .prompt {
+            color: var(--green);
+        }
+
+        #counter {
+            color: var(--yellow);
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .status-line,
+        .hint-bar,
+        .question-counter,
+        .code-header,
+        .modal-description,
+        .modal-close {
+            color: var(--comment);
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .btn {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 24px;
+            background: var(--current-line);
+            color: var(--foreground);
+            font: inherit;
+            font-size: 1.05rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            border-color: rgba(139, 233, 253, 0.4);
+            background: #4d5168;
+        }
+
+        .btn:disabled {
+            cursor: wait;
+            opacity: 0.72;
+        }
+
+        .btn-primary {
+            color: var(--bg);
+            background: var(--cyan);
+            border-color: transparent;
+        }
+
+        .btn-primary:hover {
+            background: #a8f0ff;
+            border-color: transparent;
+        }
+
+        .btn-secondary {
+            color: var(--pink);
+        }
+
+        .question-layout {
+            display: grid;
+            gap: 24px;
+        }
+
+        .question-block,
+        .answer-block {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: rgba(33, 34, 44, 0.78);
+            overflow: hidden;
+        }
+
+        .question-block {
+            border-color: rgba(139, 233, 253, 0.18);
+            background: linear-gradient(180deg, rgba(68, 71, 90, 0.42), rgba(33, 34, 44, 0.96));
+            box-shadow: inset 0 0 0 1px rgba(139, 233, 253, 0.05);
+        }
+
+        .code-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 22px;
+            background: rgba(68, 71, 90, 0.5);
+            border-bottom: 1px solid var(--border);
+            font-size: 1rem;
+        }
+
+        .code-body {
+            padding: 28px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.95;
+            font-size: clamp(1.25rem, 1.9vw, 1.65rem);
+        }
+
+        .question-text {
+            color: var(--comment-bright);
+            text-shadow: 0 0 1px rgba(165, 180, 252, 0.18);
+            font-size: clamp(1.4rem, 2.3vw, 2rem);
+            line-height: 2;
+        }
+
+        .answer-container {
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: opacity 0.35s ease, max-height 0.35s ease;
+        }
+
+        .answer-container.visible {
+            opacity: 1;
+            max-height: 1200px;
+        }
+
+        .answer-text {
+            color: var(--foreground);
+            font-size: clamp(1.18rem, 1.75vw, 1.5rem);
+        }
+
+        .answer-text .senior-says {
+            color: var(--yellow);
+        }
+
+        .answer-text .reality-check {
+            color: var(--pink);
+        }
+
+        .cursor {
+            display: inline-block;
+            color: var(--cyan);
+            animation: blink 1s steps(1, end) infinite;
+        }
+
+        .question-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding-top: 6px;
+        }
+
+        .question-counter {
+            font-size: 1.05rem;
+            font-weight: 500;
+        }
+
+        .hint-bar {
+            margin-top: 20px;
+            font-size: 1rem;
+        }
+
+        .status-line {
+            font-size: 1rem;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(40, 42, 54, 0.25);
+            border-top-color: var(--bg);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 16, 20, 0.72);
+            backdrop-filter: blur(6px);
+            z-index: 30;
+            padding: 24px;
+        }
+
+        .modal.open {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            width: min(460px, 100%);
+            padding: 22px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: #21222c;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        .modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .modal-title {
+            color: var(--cyan);
+            font-size: 1rem;
+        }
+
+        .modal-close {
+            border: 0;
+            background: transparent;
+            font: inherit;
+            font-size: 1.4rem;
+            cursor: pointer;
+        }
+
+        .modal-qr-code {
+            width: min(320px, 100%);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: white;
+        }
+
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+
+            .workspace {
+                padding: 18px;
+            }
+
+            .window-title {
+                font-size: 0.95rem;
+            }
+
+            .panel-body,
+            .code-body {
+                padding: 16px;
+            }
+
+            .terminal {
+                min-height: 360px;
+            }
+
+            .terminal-output {
+                font-size: clamp(1.08rem, 3.5vw, 1.35rem);
+            }
+
+            .question-text {
+                font-size: clamp(1.05rem, 3.3vw, 1.35rem);
+            }
+
+            .answer-text {
+                font-size: clamp(1rem, 3vw, 1.2rem);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <div class="window-header">
+            <div class="window-controls">
+                <span class="window-dot red"></span>
+                <span class="window-dot yellow"></span>
+                <span class="window-dot green"></span>
+            </div>
+            <div class="window-title">main.py - AI_Lab</div>
+            <div class="window-spacer"></div>
+        </div>
+
+        <div class="workspace">
+            <div class="ide-banner">
+                <span><strong>QA-Buster</strong> // Local FastAPI dashboard in presentation mode</span>
+                <span>Keys: <strong>Space</strong> / <strong>ArrowRight</strong></span>
+            </div>
+
+            <div class="panel lobby-state" id="lobbyState">
+                <div class="panel-header">
+                    <span class="panel-title">terminal :: queue_monitor.py</span>
+                    <span class="status-line">/status polling active</span>
+                </div>
+                <div class="panel-body terminal">
+                    <div class="terminal-output"><span class="prompt">&gt;</span> Loading dependencies...
+<span class="prompt">&gt;</span> Waiting for incoming queries...
+<span class="prompt">&gt;</span> Questions_In_Queue = <span id="counter">0</span>;</div>
+
+                    <div>
+                        <div class="status-line">Last updated: <span id="lastUpdated">Just now</span></div>
+                        <div class="hint-bar">Press Space or ArrowRight to open the active question stream.</div>
+                    </div>
+
+                    <div class="button-row">
+                        <button class="btn btn-primary" id="exploreButton" onclick="enterQuestionState(this)">Explore Questions</button>
+                        <button class="btn btn-secondary" onclick="openQRModal()">Show QR Code</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="question-state" id="questionState">
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">editor :: active_review_session.ts</span>
+                        <div class="button-row">
+                            <button class="btn" onclick="openQRModal()">QR Code</button>
+                            <button class="btn" onclick="backToDashboard()">Back</button>
+                        </div>
+                    </div>
+                    <div class="panel-body question-layout">
+                        <div class="question-block">
+                            <div class="code-header">
+                                <span>question.ts</span>
+                                <span>comment block</span>
+                            </div>
+                            <div class="code-body question-text" id="questionText"></div>
+                        </div>
+
+                        <div class="answer-block answer-container" id="answerContainer">
+                            <div class="code-header">
+                                <span>answer.ts</span>
+                                <span>typewriter output</span>
+                            </div>
+                            <div class="code-body answer-text" id="answerText"></div>
+                        </div>
+
+                        <div class="question-footer">
+                            <button class="btn btn-primary" id="actionButton" onclick="handleActionButton()">View Answer</button>
+                            <div class="question-counter" id="questionCounter"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="qrModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-head">
+                <h2 class="modal-title">Scan to Submit Questions</h2>
+                <button class="modal-close" onclick="closeQRModal()">&times;</button>
+            </div>
+            <img src="/qr/AI-MythBuster.png" alt="QR Code" class="modal-qr-code">
+            <p class="modal-description">Point your phone at this code to add a new question to the queue.</p>
+        </div>
+    </div>
+
+    <script>
+        let state = 'lobby';
+        let questions = [];
+        let currentQuestionIndex = 0;
+        let isAnswerRevealed = false;
+        let pollNewQuestionsInterval = null;
+        let activeTypewriterTimer = null;
+
+        async function fetchWithTimeout(url, timeout = 10000) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                console.log(`Timeout: ${url} took longer than ${timeout}ms`);
+                controller.abort();
+            }, timeout);
+
+            try {
+                console.log(`Fetching: ${url}`);
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                console.log(`Success: ${url} (${response.status})`);
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                console.error(`Error fetching ${url}:`, error.message);
+                throw error;
+            }
+        }
+
+        window.addEventListener('load', async () => {
+            console.log('QA-Buster Frontend Loaded');
+            console.log('Backend URL: http://localhost:8000');
+
+            try {
+                console.log('Checking backend health...');
+                const healthResponse = await fetchWithTimeout('/health', 3000);
+                if (healthResponse.ok) {
+                    const health = await healthResponse.json();
+                    console.log('Backend is healthy:', health);
+                } else {
+                    console.warn('Health check returned:', healthResponse.status);
+                }
+            } catch (e) {
+                console.error('Backend health check failed:', e.message);
+            }
+        });
+
+        async function pollStatus() {
+            try {
+                const response = await fetchWithTimeout('/status', 8000);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateCount(data.count);
+                } else {
+                    console.warn(`Status endpoint returned: ${response.status}`);
+                }
+            } catch (error) {
+                console.debug('Status poll failed (expected if backend unavailable)');
+            }
+        }
+
+        function updateCount(newCount) {
+            const countElement = document.getElementById('counter');
+            const currentCount = parseInt(countElement.textContent, 10);
+
+            if (newCount !== currentCount) {
+                countElement.textContent = newCount;
+            }
+
+            const lastUpdatedElement = document.getElementById('lastUpdated');
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            lastUpdatedElement.textContent = `${hours}:${minutes}:${seconds}`;
+        }
+
+        pollStatus();
+        setInterval(pollStatus, 1500);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Space' || event.code === 'ArrowRight') {
+                event.preventDefault();
+
+                if (state === 'lobby') {
+                    enterQuestionState();
+                } else if (state === 'question') {
+                    handleActionButton();
+                }
+            }
+        });
+
+        function openQRModal() {
+            document.getElementById('qrModal').classList.add('open');
+        }
+
+        function closeQRModal() {
+            document.getElementById('qrModal').classList.remove('open');
+        }
+
+        window.addEventListener('click', (event) => {
+            const modal = document.getElementById('qrModal');
+            if (event.target === modal) {
+                closeQRModal();
+            }
+        });
+
+        function setExploreButtonLoading(isLoading, buttonRef = null) {
+            const button = buttonRef || document.getElementById('exploreButton');
+            if (!button) return;
+
+            button.disabled = isLoading;
+            if (isLoading) {
+                button.innerHTML = '<span class="loading-spinner"></span> Loading Questions...';
+            } else {
+                button.textContent = 'Explore Questions';
+            }
+        }
+
+        async function enterQuestionState(buttonRef = null) {
+            try {
+                setExploreButtonLoading(true, buttonRef);
+
+                const response = await fetchWithTimeout('/questions', 10000);
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                questions = await response.json();
+
+                if (questions.length === 0) {
+                    alert('No approved questions yet! Check back soon.');
+                    return;
+                }
+
+                currentQuestionIndex = 0;
+                isAnswerRevealed = false;
+
+                document.getElementById('lobbyState').classList.add('hidden');
+                document.getElementById('questionState').classList.add('active');
+
+                state = 'question';
+                displayQuestion();
+
+                pollNewQuestions();
+                if (pollNewQuestionsInterval) clearInterval(pollNewQuestionsInterval);
+                pollNewQuestionsInterval = setInterval(pollNewQuestions, 2000);
+            } catch (error) {
+                console.error('Error fetching questions:', error);
+                let errorMsg = 'Failed to load questions.';
+                let detailedMsg = '';
+
+                if (error.name === 'AbortError') {
+                    errorMsg = 'Backend is taking too long (timeout after 10 seconds).';
+                    detailedMsg = 'The /questions endpoint is slow. Check if LLM is processing.';
+                } else if (error instanceof TypeError) {
+                    errorMsg = 'Backend server is not responding.';
+                    detailedMsg = 'Could not reach http://localhost:8000. Check if backend is running.';
+                }
+
+                console.error('Detailed error:', detailedMsg);
+                alert(errorMsg + '\n\n' + detailedMsg);
+            } finally {
+                setExploreButtonLoading(false, buttonRef);
+            }
+        }
+
+        function displayQuestion() {
+            const question = questions[currentQuestionIndex];
+            document.getElementById('questionText').textContent = formatQuestionComment(question.raw_question);
+
+            const answerElement = document.getElementById('answerText');
+            stopTypewriter();
+            answerElement.innerHTML = '';
+
+            const answerContainer = document.getElementById('answerContainer');
+            answerContainer.classList.remove('visible');
+            isAnswerRevealed = false;
+
+            const actionButton = document.getElementById('actionButton');
+            actionButton.textContent = 'View Answer';
+
+            document.getElementById('questionCounter').textContent =
+                `Question ${currentQuestionIndex + 1} of ${questions.length}`;
+        }
+
+        function handleActionButton() {
+            if (!isAnswerRevealed) {
+                const answerContainer = document.getElementById('answerContainer');
+                answerContainer.classList.add('visible');
+                isAnswerRevealed = true;
+
+                const question = questions[currentQuestionIndex];
+                const answerText = question.ai_answer || 'No answer available';
+                startTypewriter(formatAnswerForHighlight(answerText));
+
+                const actionButton = document.getElementById('actionButton');
+                actionButton.textContent = 'Next Question';
+            } else {
+                if (currentQuestionIndex < questions.length - 1) {
+                    currentQuestionIndex++;
+                    displayQuestion();
+                } else {
+                    if (pollNewQuestionsInterval) {
+                        clearInterval(pollNewQuestionsInterval);
+                        pollNewQuestionsInterval = null;
+                    }
+
+                    document.getElementById('questionState').classList.remove('active');
+                    document.getElementById('lobbyState').classList.remove('hidden');
+                    state = 'lobby';
+                    stopTypewriter();
+                    setExploreButtonLoading(false);
+                }
+            }
+        }
+
+        function backToDashboard() {
+            if (pollNewQuestionsInterval) {
+                clearInterval(pollNewQuestionsInterval);
+                pollNewQuestionsInterval = null;
+            }
+
+            stopTypewriter();
+            document.getElementById('questionState').classList.remove('active');
+            document.getElementById('lobbyState').classList.remove('hidden');
+            state = 'lobby';
+            currentQuestionIndex = 0;
+            isAnswerRevealed = false;
+            setExploreButtonLoading(false);
+        }
+
+        async function pollNewQuestions() {
+            try {
+                const response = await fetchWithTimeout('/questions', 10000);
+                if (!response.ok) return;
+
+                const newQuestions = await response.json();
+                const currentLength = questions.length;
+
+                if (newQuestions.length > currentLength) {
+                    const addedCount = newQuestions.length - currentLength;
+                    console.log(`Found ${addedCount} new question(s)!`);
+
+                    questions = newQuestions;
+
+                    document.getElementById('questionCounter').textContent =
+                        `Question ${currentQuestionIndex + 1} of ${questions.length}`;
+                }
+            } catch (error) {
+                console.debug('New questions poll failed (expected if backend unavailable)');
+            }
+        }
+
+        function formatQuestionComment(questionText) {
+            const lines = normalizeDisplayText(questionText || '')
+                .split(/\r?\n/)
+                .filter((line, index, array) => !(index === array.length - 1 && line === ''));
+
+            const body = lines.length
+                ? lines.map((line) => ` * ${line}`).join('\n')
+                : ' * ';
+
+            return `/* \n * Fresher Query:\n${body}\n */`;
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function formatAnswerForHighlight(answerText) {
+            const escaped = escapeHtml(normalizeDisplayText(answerText || 'No answer available'));
+            return escaped
+                .replace(/Senior Says:/g, '<span class="senior-says">Senior Says:</span>')
+                .replace(/Reality Check:/g, '<span class="reality-check">Reality Check:</span>');
+        }
+
+        function repairMojibake(text) {
+            const cp1252Map = {
+                8364: 0x80,
+                8218: 0x82,
+                402: 0x83,
+                8222: 0x84,
+                8230: 0x85,
+                8224: 0x86,
+                8225: 0x87,
+                710: 0x88,
+                8240: 0x89,
+                352: 0x8A,
+                8249: 0x8B,
+                338: 0x8C,
+                381: 0x8E,
+                8216: 0x91,
+                8217: 0x92,
+                8220: 0x93,
+                8221: 0x94,
+                8226: 0x95,
+                8211: 0x96,
+                8212: 0x97,
+                732: 0x98,
+                8482: 0x99,
+                353: 0x9A,
+                8250: 0x9B,
+                339: 0x9C,
+                382: 0x9E,
+                376: 0x9F
+            };
+
+            let repaired = String(text || '');
+            if (!/[\u00c2-\u00f0]/.test(repaired)) {
+                return repaired;
+            }
+
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+                try {
+                    const bytes = [];
+                    let convertible = true;
+
+                    for (const char of repaired) {
+                        const code = char.charCodeAt(0);
+                        if (code <= 0xFF) {
+                            bytes.push(code);
+                        } else if (cp1252Map[code] !== undefined) {
+                            bytes.push(cp1252Map[code]);
+                        } else {
+                            convertible = false;
+                            break;
+                        }
+                    }
+
+                    if (!convertible || !bytes.length) {
+                        break;
+                    }
+
+                    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes));
+                    if (decoded === repaired) {
+                        break;
+                    }
+                    repaired = decoded;
+                } catch (error) {
+                    break;
+                }
+            }
+
+            return repaired;
+        }
+
+        function normalizeDisplayText(text) {
+            return repairMojibake(text)
+                .replace(/\u2026/g, '...')
+                .replace(/\u00a0/g, ' ')
+                .replace(/\u00c2/g, '');
+        }
+
+        function tokenizeHtml(html) {
+            const tokens = [];
+            let i = 0;
+
+            while (i < html.length) {
+                if (html[i] === '<') {
+                    const end = html.indexOf('>', i);
+                    if (end === -1) {
+                        tokens.push(html.slice(i));
+                        break;
+                    }
+                    tokens.push(html.slice(i, end + 1));
+                    i = end + 1;
+                } else {
+                    tokens.push(html[i]);
+                    i += 1;
+                }
+            }
+
+            return tokens;
+        }
+
+        function stopTypewriter() {
+            if (activeTypewriterTimer) {
+                clearTimeout(activeTypewriterTimer);
+                activeTypewriterTimer = null;
+            }
+        }
+
+        function renderWithCursor(content) {
+            document.getElementById('answerText').innerHTML = `${content}<span class="cursor">&#9608;</span>`;
+        }
+
+        function startTypewriter(html) {
+            stopTypewriter();
+
+            const tokens = tokenizeHtml(html);
+            const answerElement = document.getElementById('answerText');
+            let index = 0;
+            let rendered = '';
+
+            answerElement.innerHTML = '<span class="cursor">&#9608;</span>';
+
+            function tick() {
+                if (index >= tokens.length) {
+                    renderWithCursor(rendered);
+                    activeTypewriterTimer = null;
+                    return;
+                }
+
+                rendered += tokens[index];
+                index += 1;
+                renderWithCursor(rendered);
+
+                const previousToken = tokens[index - 1];
+                const delay = previousToken === '\n' ? 28 : previousToken.startsWith('<') ? 0 : 16;
+                activeTypewriterTimer = setTimeout(tick, delay);
+            }
+
+            tick();
+        }
+    </script>
+</body>
+</html>
