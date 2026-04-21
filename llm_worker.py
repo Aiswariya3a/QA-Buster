@@ -1,14 +1,14 @@
 import asyncio
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI
 import httpx
 from database import SessionLocal, StudentQuestion
 
 load_dotenv()
 
-http_client = httpx.Client(timeout=90.0)  # Increased for reasoning models with more tokens
-client = OpenAI(
+http_client = httpx.AsyncClient(timeout=90.0)  # Increased for reasoning models with more tokens
+client = AsyncOpenAI(
     base_url=os.getenv("LLM_BASE_URL", "http://localhost:1234/v1"),
     api_key=os.getenv("LLM_API_KEY", "lm-studio"),
     http_client=http_client
@@ -31,7 +31,7 @@ Question: {question}
 
 Response (ONLY answer "APPROPRIATE" or "INAPPROPRIATE"):"""
 
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=MODEL,
             messages=[
                 {"role": "user", "content": moderation_prompt}
@@ -82,7 +82,7 @@ RULES for your persona:
 4. The Format: Keep it punchy. You are on a projector screen, so limit yourself to 3-4 short sentences maximum. Use markdown for clarity if needed.
 5. IMPORTANT - Use SIMPLE ENGLISH: Use short sentences, simple words, no hard to understand english phrases, avoid technical jargon. Think you're explaining to a 10-year-old bad in english understanding. If you must use technical terms, explain them immediately in simple words."""
 
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -262,7 +262,11 @@ async def run_llm_worker_loop():
                 print(f"⚠️ LLM Worker has failed 5 times. Make sure LM Studio is running on localhost:1234")
                 retry_count = 0  # Reset counter
         
-        await asyncio.sleep(LLM_WORKER_INTERVAL)
+        # Always yield back to the main event loop so FastAPI stays responsive.
+        await asyncio.sleep(1)
+
+        if LLM_WORKER_INTERVAL > 1:
+            await asyncio.sleep(LLM_WORKER_INTERVAL - 1)
 
 
 if __name__ == "__main__":
